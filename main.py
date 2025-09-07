@@ -28,7 +28,7 @@ def setup_output():
 def get_input():
     job_domain = input("Enter the job domain you're interested in: ")
     location = input("Enter the location: ")
-    experience = input("Enter the experience: ")
+    experience = input("Enter the experience ('Entry Level', '1 Year', '2 Years','3 Years'...): ")
     return job_domain, experience, location
 
 def handle_google(iframe_google, driver):
@@ -160,8 +160,10 @@ def parser_main_Page(html):
 # Handle the raw data and convert into a csv
 def clean_text(value):
     if isinstance(value, str):
-        # Replace special characters and returns with space
-        value = re.sub(r'\s+', ' ', value)
+        # Replace tabs and carriage returns with space
+        value = re.sub(r'[\t\r]+', ' ', value)
+        # Collapse multiple newlines into ONE newline
+        value = re.sub(r'\n+', '\n', value)
         return value.strip()
     elif isinstance(value, list):
         return [clean_text(v) for v in value]

@@ -13,6 +13,7 @@ from datetime import datetime
 from variables import *
 import pandas as pd
 import re
+import argparse
 
 # Setup Output
 def setup_output():
@@ -21,28 +22,25 @@ def setup_output():
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%m_%d-%H_%M_")
     file_path = os.path.join(output_dir, "Job-Search-Results-" + timestamp + ".csv")
-    print(":} Output Setup Done!!")
+    log_print(":} Output Setup Done!!")
     return file_path
 
-# Get User-Input
-def get_input():
-    job_domain = input("Enter the job domain you're interested in: ")
-    location = input("Enter the location: ")
-    experience = input("Enter the experience ('Entry Level', '1 Year', '2 Years','3 Years'...): ")
-    return job_domain, experience, location
+def log_print(msg):
+    print(f"{datetime.now().strftime('%H-%M-%S')}| {msg}")
+
 
 def handle_google(iframe_google, driver):
     try:
         driver.switch_to.frame(iframe_google)
         WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, "close"))).click()
-        print(":} Google Popup was taken care of ;)")
+        log_print(":} Google Popup was taken care of ;)")
     except Exception as e:
-        print(":} Couldn't handle the Popup :(\nError:", e)
+        log_print(":} Couldn't handle the Popup :(\nError:", e)
 
 # Initialize the driver and look for the job
 def initialize_and_begin(job,exp,loc):
 
-    print(":} Initializing the Driver")
+    log_print(":} Initializing the Driver")
     options  = uc.ChromeOptions()
     options.add_argument("--headless=new")
     options.add_argument("--window-size=1920x1080")
@@ -50,12 +48,12 @@ def initialize_and_begin(job,exp,loc):
     driver = uc.Chrome(options=options)
 
     driver.get(URL)
-    print(":} Landed on the Search Page")
+    log_print(":} Landed on the Search Page")
     time.sleep(2)
 
     try:
         alert = driver.switch_to.alert
-        print(f":- Alert Popped Up: {alert.text}")
+        log_print(f":- Alert Popped Up: {alert.text}")
         alert.dismiss()
     except NoAlertPresentException:
         pass
@@ -71,14 +69,14 @@ def initialize_and_begin(job,exp,loc):
         exp = temp.replace("REPLACE_ME", f"{exp}")
         driver.find_element(By.XPATH, exp).click()
 
-        print(":} Entered your Job Preferences on the Search Page")
+        log_print(":} Entered your Job Preferences on the Search Page")
         WebDriverWait(driver,5).until(EC.element_to_be_clickable((By.XPATH, JOB_SEARCH_BUTTON))).click()
         time.sleep(4)
-        print(":} Landed on the Main Page")
+        log_print(":} Landed on the Main Page")
         found_job_alert = driver.find_elements(By.ID, JOB_ALERT_POPUP)
         if found_job_alert:
             driver.find_element(By.XPATH, JOB_ALERT_CLOSE).click()
-            print(":} Job Alert Popup taken care of ;)")
+            log_print(":} Job Alert Popup taken care of ;)")
 
         html = driver.page_source
     finally:
@@ -86,7 +84,7 @@ def initialize_and_begin(job,exp,loc):
     return html
 
 # Parsing the details page of jobs mentioned in the main page
-def parser_details_Page(link):
+def scraper_details_Page(link):
     headers = {"User-Agent": "Mozilla/5.0"}
     html = requests.get(link, headers=headers).text
     soup = BeautifulSoup(html, "lxml")
@@ -119,8 +117,8 @@ def parser_details_Page(link):
     return job_description, detail, skill, about_comp
 
 # Parsing the 1st search page for all jobs and pages associated to those jobs
-def parser_main_Page(html):
-    print(":} Scraping the Main Page")
+def scraper_main_Page(html):
+    log_print(":} Scraping the Main Page")
 
     soup = BeautifulSoup(html, "lxml")
     job_cards = soup.find_all("li", class_=JOB_CARD_CLASS)
@@ -143,7 +141,7 @@ def parser_main_Page(html):
 
         link = job_card.find("a")["href"]
 
-        job_description, detail, skill, about_comp = parser_details_Page(link)
+        job_description, detail, skill, about_comp = scraper_details_Page(link)
 
         results["Job Title"].append(job_title)
         results["Company Name"].append(company_name)
@@ -153,7 +151,7 @@ def parser_main_Page(html):
         results["Key Skills"].append(skill)
         results["Related"].append(about_comp)
 
-        print(f":- Scraped {count} Job")
+        log_print(f":- Scraped {count} Job")
 
     return results
 
@@ -174,7 +172,7 @@ def clean_text(value):
 def data_handler(raw_data):
     df = pd.DataFrame(raw_data)
 
-    print(":} Formatting data for a cleaner look")
+    log_print(":} Formatting data for a cleaner look")
 
     # Clean everything
     for col in df.columns:
@@ -194,21 +192,36 @@ def data_handler(raw_data):
     return df
 
 
-def save_to_file(df, file_path):
+def save_to_csv_file(df, file_path):
     df.to_csv(file_path, index=False, encoding='utf-8')
-    print(f"Saved results to CSV file.")
+    log_print(f"Saved results to CSV file.")
+
+def save_to_xlsx_file(df, file_path):
+    df.to_excel(file_path, index=False)
+    log_print(f"Saved results to Excel file.")
 
 if __name__ == "__main__":
-    job, exp, loc = get_input()
+
+    parser = argparse.ArgumentParser(description="Job Scraper using Selenium")
+    parser.add_argument("--job", type=str, required=True, help="Job title to search")
+    parser.add_argument("--exp", type=str, required=True, help="Experience level")
+    parser.add_argument("--loc", type=str, required=True, help="Job location('Entry Level', '1 Year', '2 Years','3 Years'...)")
+    args = parser.parse_args()
+
+    log_print(f"Searching for: {args.job}")
+    log_print(f"Experience: {args.exp}")
+    log_print(f"Location: {args.loc}")
+
     file_path = setup_output()
 
-    html = initialize_and_begin(job,exp,loc)
-    raw_data = parser_main_Page(html)
+    html = initialize_and_begin(args.job,args.exp,args.loc)
+    raw_data = scraper_main_Page(html)
 
     if not raw_data["Job Title"]:
-        print(":} No Jobs found for your search :(\n:}Try Again Maybe")
+        log_print(":} No Jobs found for your search :(\n:}Try Again Maybe")
         exit()
 
     data_frame = data_handler(raw_data)
     print(data_frame)
-    save_to_file(data_frame, file_path)
+    save_to_csv_file(data_frame, file_path)
+    save_to_xlsx_file(data_frame, file_path.replace(".csv",".xlsx"))

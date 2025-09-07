@@ -109,6 +109,8 @@ Job-Scraper/
     pip install -r requirements.txt
 3. **Run the script**
     ```bash
-   python main.py
+   python main.py -- job "JOB_DOMAIN_HERE" --exp "JOB_EXPERINCE(run python main.py -h for samples)"
+    --loc-"JOB_LOCATION"
    
+
 ---
